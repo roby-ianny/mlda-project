@@ -1,19 +1,11 @@
-# /// script
-# requires-python = ">=3.13"
-# dependencies = [
-#     "kagglehub==1.0.2",
-#     "nbformat==5.11.1",
-#     "numpy==2.5.3",
-#     "ruff==0.16.9",
-#     "scikit-learn==1.9.1",
-#     "skorch==1.4.0",
-# ]
-# ///
-
 import marimo
 
-__generated_with = "0.25.0"
-app = marimo.App(width="medium", auto_download=["html"])
+__generated_with = "0.24.0"
+app = marimo.App(
+    width="medium",
+    layout_file="layouts/notebook.slides.json",
+    auto_download=["html"],
+)
 
 with app.setup(hide_code=True):
     import marimo as mo
@@ -26,6 +18,7 @@ with app.setup(hide_code=True):
     from torch.utils.data import Subset, DataLoader
     from torchvision import datasets, transforms
     from skorch import NeuralNetClassifier
+    from skorch.dataset import ValidSplit
     from pathlib import Path
     from PIL import Image
     from sklearn.model_selection import GridSearchCV
@@ -34,8 +27,6 @@ with app.setup(hide_code=True):
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-    # elif torch.is_vulkan_available:
-    #     device = torch.device("vulkan")
     else:
         device = torch.device("cpu")
     print("Device:", device)
@@ -230,7 +221,6 @@ def _(DATA_DIR, targets, testing_transf_224, training_transf_224, transf_64):
         dataset_train_64,
         idx_test,
         idx_train,
-        train_test_split,
     )
 
 
@@ -435,7 +425,7 @@ def _(XL_sub, XT_flat, YL_sub, YT):
     Yp_svm = M_svm.predict(XT_flat)
     acc_svm = accuracy_score(YT, Yp_svm)
     cm_svm = confusion_matrix(YT, Yp_svm)
-    return M_svm, acc_svm, cm_svm
+    return M_svm, Yp_svm, acc_svm, cm_svm
 
 
 @app.cell
@@ -535,52 +525,26 @@ def _(NUM_CLASSES):
     return CustomCNN, nn
 
 
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    For Neural Networks we have to split into train and validation sets
-    """)
-    return
-
-
-@app.cell
-def _(X_train_64, YL, train_test_split):
-    X_train_cnn_64, X_validation_cnn_64, y_train_cnn_64, y_val_cnn_64 = (
-        train_test_split(X_train_64, YL, test_size=0.1)
-    )
-
-    print("X_train_cnn_64: ", len(X_train_cnn_64))
-    print("X_validation_cnn_64: ", len(X_validation_cnn_64))
-    return X_train_cnn_64, y_train_cnn_64
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    We can now train the network
-    """)
-    return
-
-
 @app.cell
 def _():
     from skorch.callbacks import LRScheduler
 
-    lrs = LRScheduler(policy="StepLR", step_size=10, gamma=0.1)
-    return (lrs,)
+    lrs_cnn = LRScheduler(policy="StepLR", step_size=10, gamma=0.1)
+    return LRScheduler, lrs_cnn
 
 
 @app.cell
-def _(CustomCNN, X_train_cnn_64, lrs, y_train_cnn_64):
+def _(CustomCNN, X_train_64, YL, lrs_cnn):
     Alg_cnn = NeuralNetClassifier(
         CustomCNN,
+        train_split=ValidSplit(cv=0.2, stratified=True, random_state=11),
         max_epochs=30,
         lr=0.001,
         optimizer=torch.optim.Adam,
-        device=_device,
-        callbacks=[lrs],
+        device=device,
+        callbacks=[lrs_cnn],
     )
-    Alg_cnn.fit(X_train_cnn_64, y_train_cnn_64)
+    Alg_cnn.fit(X_train_64, YL)
     return (Alg_cnn,)
 
 
@@ -631,32 +595,21 @@ def _(NUM_CLASSES, nn):
 
 
 @app.cell
-def _(X_train_224, YL, train_test_split):
-    (
-        X_train_rn18_224,
-        X_validation_rn18_224,
-        y_train_rn18_224,
-        y_val_rn18_224,
-    ) = train_test_split(X_train_224, YL, test_size=0.1)
+def _(CustomRN18, LRScheduler, X_train_224, YL, nn):
+    lrs_rn18 = LRScheduler(policy="StepLR", step_size=10, gamma=0.1)
 
-    print("X_train_cnn_64: ", len(X_train_rn18_224))
-    print("X_validation_cnn_64: ", len(X_validation_rn18_224))
-    return X_train_rn18_224, y_train_rn18_224
-
-
-@app.cell
-def _(CustomRN18, X_train_rn18_224, lrs, nn, y_train_rn18_224):
     Alg_rn18 = NeuralNetClassifier(
         CustomRN18,
+        train_split=ValidSplit(cv=0.2, stratified=True, random_state=11),
         criterion=nn.CrossEntropyLoss,
         max_epochs=30,
         lr=0.001,
-        optimizer=torch.optim.Adam,
-        # optimizer__momentum=0.9,
+        optimizer=torch.optim.SGD,
+        optimizer__momentum=0.9,
         device=device,
-        callbacks=[lrs],
+        callbacks=[lrs_rn18],
     )
-    Alg_rn18.fit(X_train_rn18_224, y_train_rn18_224)
+    Alg_rn18.fit(X_train_224, YL)
     return (Alg_rn18,)
 
 
@@ -667,7 +620,7 @@ def _(Alg_rn18, X_test_224, YT, overview_and_plot_cm):
     cm_rn18 = confusion_matrix(YT, Yp_rn18)
 
     overview_and_plot_cm(acc_rn18, None, cm_rn18, "Custom Neural Network")
-    return acc_rn18, cm_rn18
+    return Yp_rn18, acc_rn18, cm_rn18
 
 
 @app.cell(hide_code=True)
@@ -679,22 +632,24 @@ def _():
 
 
 @app.cell
-def _(CustomRN18, X_train_rn18_224, lrs, nn, y_train_rn18_224):
+def _(CustomRN18, LRScheduler, X_train_224, YL, nn):
     from skorch.callbacks import Freezer
 
-    frz18 = Freezer(lambda name: not name.startswith("model.fc"))
+    lrs_rn18_frz = LRScheduler(policy="StepLR", step_size=10, gamma=0.1)
+    rn18_frz = Freezer(lambda name: not name.startswith("model.fc"))
 
     Alg_rn18_frz = NeuralNetClassifier(
         CustomRN18,
+        train_split=ValidSplit(cv=0.2, stratified=True, random_state=11),
         criterion=nn.CrossEntropyLoss,
         max_epochs=30,
         lr=0.001,
         optimizer=torch.optim.SGD,
         optimizer__momentum=0.9,
         device=device,
-        callbacks=[lrs, frz18],
+        callbacks=[lrs_rn18_frz, rn18_frz],
     )
-    Alg_rn18_frz.fit(X_train_rn18_224, y_train_rn18_224)
+    Alg_rn18_frz.fit(X_train_224, YL)
     return (Alg_rn18_frz,)
 
 
@@ -708,6 +663,73 @@ def _(Alg_rn18_frz, X_test_224, YT, overview_and_plot_cm):
         acc_rn18_frz, None, cm_rn18_frz, "ResNet18 with frozen hidden layers"
     )
     return acc_rn18_frz, cm_rn18_frz
+
+
+@app.cell
+def _(Alg_cnn, Alg_rn18, Alg_rn18_frz):
+    def get_hist(alg, key):
+        return [h[key] for h in alg.history if key in h]
+
+    _fig, _axes = plt.subplots(1, 2, figsize=(14, 5))
+    # Loss
+    _axes[0].plot(
+        get_hist(Alg_cnn, "train_loss"),
+        label="CNN (train)",
+        color="#4C72B0",
+    )
+    _axes[0].plot(
+        get_hist(Alg_cnn, "valid_loss"),
+        label="CNN (val)",
+        color="#4C72B0",
+        linestyle="--",
+    )
+    _axes[0].plot(
+        get_hist(Alg_rn18, "train_loss"),
+        label="ResNet18 FT (train)",
+        color="#C44E52",
+    )
+    _axes[0].plot(
+        get_hist(Alg_rn18, "valid_loss"),
+        label="ResNet18 FT (val)",
+        color="#C44E52",
+        linestyle="--",
+    )
+    _axes[0].plot(
+        get_hist(Alg_rn18_frz, "train_loss"),
+        label="ResNet18 Frz (train)",
+        color="#55A868",
+    )
+    _axes[0].plot(
+        get_hist(Alg_rn18_frz, "valid_loss"),
+        label="ResNet18 Frz (val)",
+        color="#55A868",
+        linestyle="--",
+    )
+    _axes[0].set_title("Andamento Loss (Train vs Val)")
+    _axes[0].set_xlabel("Epoche")
+    _axes[0].set_ylabel("Cross-Entropy Loss")
+    _axes[0].legend()
+    _axes[0].grid(alpha=0.3)
+    # Accuracy
+    _axes[1].plot(get_hist(Alg_cnn, "valid_acc"), label="CNN", color="#4C72B0")
+    _axes[1].plot(
+        get_hist(Alg_rn18, "valid_acc"),
+        label="ResNet18 FT",
+        color="#C44E52",
+    )
+    _axes[1].plot(
+        get_hist(Alg_rn18_frz, "valid_acc"),
+        label="ResNet18 Frz",
+        color="#55A868",
+    )
+    _axes[1].set_title("Validation Accuracy per epoch")
+    _axes[1].set_xlabel("Epochs")
+    _axes[1].set_ylabel("Accuracy")
+    _axes[1].legend()
+    _axes[1].grid(alpha=0.3)
+    plt.tight_layout()
+    _fig
+    return
 
 
 @app.cell(hide_code=True)
@@ -847,9 +869,146 @@ def _():
     mo.md(r"""
     > [!TODO]
     >
-    > * Add heatmap for linearSVC
     > * Add heatmap for a non-pizza image for CNNs
     """)
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(X_test_64, YT, Yp_rn18, Yp_svm, classes):
+    # Immagini in cui SVM sbaglia MA ResNet18 ci azzecca
+    interesting = np.where((Yp_svm != YT) & (Yp_rn18 == YT))[0]
+    print(f"SVM vs ResNet18: {len(interesting)} / {len(YT)}")
+
+    n_show = min(4, len(interesting))
+    _fig, _axs = plt.subplots(1, n_show, figsize=(12, 3))
+    for _i, _idx in enumerate(interesting[:n_show]):
+        _img = X_test_64[_idx].transpose(1, 2, 0)
+        # De-normalizzazione per visualizzare i colori naturali
+        _img = _img * np.array([0.229, 0.224, 0.225]) + np.array(
+            [0.485, 0.456, 0.406]
+        )
+        _img = np.clip(_img, 0, 1)
+        _axs[_i].imshow(_img)
+        _axs[_i].axis("off")
+        _axs[_i].set_title(
+            f"Truth: {classes[YT[_idx]]}\nSVM: {classes[Yp_svm[_idx]]}\nRN18: {classes[Yp_rn18[_idx]]}",
+            fontsize=10,
+        )
+    plt.tight_layout()
+    _fig
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Heatmap
+    """)
+    return
+
+
+@app.cell
+def _(Alg_rn18, X_test_224, YT, classes):
+    import cv2  # oppure usiamo semplice scipy/matplotlib se cv2 non c'è
+
+    def generate_gradcam(model, img_tensor, target_class):
+        model.eval()
+        gradients = []
+        activations = []
+
+        # Hook per catturare attivazioni e gradienti dell'ultimo blocco conv (layer4)
+        def forward_hook(module, input, output):
+            activations.append(output)
+
+        def backward_hook(module, grad_in, grad_out):
+            gradients.append(grad_out[0])
+
+        target_layer = model.model.layer4[-1]
+        h1 = target_layer.register_forward_hook(forward_hook)
+        h2 = target_layer.register_full_backward_hook(backward_hook)
+
+        # Forward pass (aggiunge dimensione batch se necessario)
+        x = img_tensor.unsqueeze(0) if img_tensor.ndim == 3 else img_tensor
+        x = x.to(next(model.parameters()).device)
+        output = model(x)
+
+        # Backward pass per la classe bersaglio
+        model.zero_grad()
+        loss = output[0, target_class]
+        loss.backward()
+
+        # Pulizia hook
+        h1.remove()
+        h2.remove()
+
+        # Calcolo pesi con global average pooling sui gradienti
+        grads = gradients[0][0].detach().cpu().numpy()  # (C, H, W)
+        acts = activations[0][0].detach().cpu().numpy()  # (C, H, W)
+        weights = np.mean(grads, axis=(1, 2))  # (C,)
+
+        # Somma pesata delle feature maps
+        cam = np.zeros(acts.shape[1:], dtype=np.float32)
+        for i, w in enumerate(weights):
+            cam += w * acts[i]
+
+        # ReLU per tenere solo attivazioni positive
+        cam = np.maximum(cam, 0)
+        # Normalizzazione tra 0 e 1
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        return cam
+
+    # Scegliamo un'immagine di test di Pizza (classe 1) e una di Not-Pizza (classe 0)
+    idx_pizza = np.where(YT == 1)[0][0]
+    idx_not_pizza = np.where(YT == 0)[0][0]
+
+    _fig, _axs = plt.subplots(2, 2, figsize=(8, 8))
+
+    for row, (idx, cls_target) in enumerate(
+        [(idx_pizza, 1), (idx_not_pizza, 0)]
+    ):
+        img_np = X_test_224[idx]
+        cam = generate_gradcam(
+            Alg_rn18.module_, torch.tensor(img_np), cls_target
+        )
+
+        # De-normalizzazione per visualizzare l'immagine originale
+        orig = img_np.transpose(1, 2, 0)
+        orig = orig * np.array([0.229, 0.224, 0.225]) + np.array(
+            [0.485, 0.456, 0.406]
+        )
+        orig = np.clip(orig, 0, 1)
+
+        # 1. Immagine Originale
+        _axs[row, 0].imshow(orig)
+        _axs[row, 0].set_title(
+            f"Original ({classes[cls_target]})", fontsize=11
+        )
+        _axs[row, 0].axis("off")
+
+        # 2. Immagine con Overlay Heatmap
+        _axs[row, 1].imshow(orig)
+        # Sovrapponiamo la mappa con alpha=0.5 e colormap 'jet'
+        _axs[row, 1].imshow(
+            cam, cmap="jet", alpha=0.5, extent=(0, 224, 224, 0)
+        )
+        _axs[row, 1].set_title(
+            f"Grad-CAM (Focus su {classes[cls_target]})", fontsize=11
+        )
+        _axs[row, 1].axis("off")
+
+    plt.suptitle(
+        "Explainable AI: ResNet18 (Grad-CAM)",
+        fontsize=13,
+        fontweight="bold",
+    )
+    plt.tight_layout()
+    _fig
     return
 
 
