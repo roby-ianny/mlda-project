@@ -1,3 +1,15 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "kagglehub==1.0.2",
+#     "nbformat==5.11.1",
+#     "numpy==2.5.3",
+#     "ruff==0.16.9",
+#     "scikit-learn==1.9.1",
+#     "skorch==1.4.0",
+# ]
+# ///
+
 import marimo
 
 __generated_with = "0.24.0"
@@ -142,7 +154,13 @@ def _():
             transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
         ]
     )
-    return testing_transf_224, training_transf_224, transf_64
+    return (
+        IMAGENET_MEAN,
+        IMAGENET_STD,
+        testing_transf_224,
+        training_transf_224,
+        transf_64,
+    )
 
 
 @app.cell(hide_code=True)
@@ -257,10 +275,23 @@ def _(
     return X_test_224, X_test_64, X_train_224, X_train_64
 
 
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## The Dataset
+
+    * Pizza versus not_pizza dataset is a dataset with images extracted from food-101 dataset
+    * Chosen because is a 'didactic' dataset and because and I like pizza
+    * Binary classification problem
+    * **Small dataset**: less than 1000 elements per class
+    """)
+    return
+
+
 @app.cell
 def _(classes, dataset):
     # Display 4 sample images from the dataset in a 2x2 grid
-    _fig, _axes = plt.subplots(2, 2, figsize=(8, 8))
+    _fig, _axes = plt.subplots(1, 4, figsize=(8, 8))
     _axes = _axes.flatten()
 
     # Randomly select 4 images from the dataset
@@ -280,11 +311,6 @@ def _(classes, dataset):
         _axes[i].set_title(f"{classes[label]}", fontsize=14, fontweight="bold")
         _axes[i].axis("off")
 
-    _fig.suptitle(
-        "Sample Images from Pizza vs Not Pizza Dataset",
-        fontsize=16,
-        fontweight="bold",
-    )
     plt.tight_layout()
     _fig
     return
@@ -293,7 +319,7 @@ def _(classes, dataset):
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Classic Machine Learning
+    ## Traditional Machine Learning
     """)
     return
 
@@ -355,20 +381,21 @@ def _(XL_sub, XT_flat, YL_sub, YT):
     Yp_lsvc = M_lsvc.predict(XT_flat)
     acc_lsvc = accuracy_score(YT, Yp_lsvc)
     cm_lsvc = confusion_matrix(YT, Yp_lsvc)
-    return M_lsvc, acc_lsvc, cm_lsvc
+    return M_lsvc, acc_lsvc, cm_lsvc, grid_lsvc
 
 
 @app.cell
-def _(M_lsvc, acc_lsvc, cm_lsvc, overview_and_plot_cm):
-    overview_and_plot_cm(acc_lsvc, M_lsvc.best_params_, cm_lsvc, "LinearSVC")
-    return
-
-
-@app.cell(hide_code=True)
-def _():
-    mo.md(r"""
-    So the linear model performs a little better than tossing a coin
-    """)
+def _(M_lsvc, acc_lsvc, cm_lsvc, grid_lsvc, overview_and_plot_cm):
+    mo.hstack(
+        [
+            overview_and_plot_cm(
+                acc_lsvc, M_lsvc.best_params_, cm_lsvc, "LinearSVC"
+            ),
+            mo.vstack(
+                [mo.ui.table(grid_lsvc), mo.ui.table(M_lsvc.best_params_)]
+            ),
+        ]
+    )
     return
 
 
@@ -400,6 +427,14 @@ def _(M_lsvc, classes):
     return
 
 
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    So the linear model performs a little better than tossing a coin
+    """)
+    return
+
+
 @app.cell
 def _():
     mo.md(r"""
@@ -425,12 +460,21 @@ def _(XL_sub, XT_flat, YL_sub, YT):
     Yp_svm = M_svm.predict(XT_flat)
     acc_svm = accuracy_score(YT, Yp_svm)
     cm_svm = confusion_matrix(YT, Yp_svm)
-    return M_svm, Yp_svm, acc_svm, cm_svm
+    return M_svm, Yp_svm, acc_svm, cm_svm, grid_svm
 
 
 @app.cell
-def _(M_svm, acc_svm, cm_svm, overview_and_plot_cm):
-    overview_and_plot_cm(acc_svm, M_svm.best_params_, cm_svm, "SVM RBF")
+def _(M_svm, acc_svm, cm_svm, grid_svm, overview_and_plot_cm):
+    mo.hstack(
+        [
+            overview_and_plot_cm(
+                acc_svm, M_svm.best_params_, cm_svm, "SVM RBF"
+            ),
+            mo.vstack(
+                [mo.ui.table(grid_svm), mo.ui.table(M_svm.best_params_)]
+            ),
+        ]
+    )
     return
 
 
@@ -458,12 +502,19 @@ def _(XL_sub, XT_flat, YL_sub, YT):
     Yp_rf = M_rf.predict(XT_flat)
     acc_rf = accuracy_score(YT, Yp_rf)
     cm_rf = confusion_matrix(YT, Yp_rf)
-    return M_rf, acc_rf, cm_rf
+    return M_rf, acc_rf, cm_rf, grid_rf
 
 
 @app.cell
-def _(M_rf, acc_rf, cm_rf, overview_and_plot_cm):
-    overview_and_plot_cm(acc_rf, M_rf.best_params_, cm_rf, "Random Forest")
+def _(M_rf, acc_rf, cm_rf, grid_rf, overview_and_plot_cm):
+    mo.hstack(
+        [
+            overview_and_plot_cm(
+                acc_rf, M_rf.best_params_, cm_rf, "Random Forest"
+            ),
+            mo.vstack([mo.ui.table(grid_rf), mo.ui.table(M_rf.best_params_)]),
+        ]
+    )
     return
 
 
@@ -471,7 +522,10 @@ def _(M_rf, acc_rf, cm_rf, overview_and_plot_cm):
 def _():
     mo.md(r"""
     ### Conclusions
-    As expected, for image recognition the performance of classic machine learning models are not the best, we can also notice that the linear model has a more 'balanced' confusion matrix while the nonlinear models such as SVM RBF and RandomForest are more accurate on detectin `not_pizza` images and an higher error (wrong guesses) with `pizza` images
+    As expected, for image recognition the performance of classic machine learning models are not the best, we can also notice that
+    * the linearSVC does not perform well
+    * there is little improvement with SVM RBF
+    * Random forest performs the best between these 'traditional ML' models
     """)
     return
 
@@ -484,6 +538,73 @@ def _():
     We'll follow the same approach we've seen in class for creating a NN for 64x64 images
     """)
     return
+
+
+@app.cell
+def _(IMAGENET_MEAN, IMAGENET_STD):
+    def plot_misclassified_and_confidence(
+        alg, X_test, YT, Yp, classes, label, n_show=6
+    ):
+        """Plot misclassified examples and confidence distribution for a classifier."""
+        # Get prediction probabilities
+        Yp_proba = alg.predict_proba(X_test)
+
+        # Separate confidence for correct vs incorrect predictions
+        correct_mask = Yp == YT
+        incorrect_mask = ~correct_mask
+
+        _conf_correct = Yp_proba[correct_mask, YT[correct_mask]]
+        _conf_incorrect = Yp_proba[incorrect_mask, YT[incorrect_mask]]
+
+        # Show some misclassified examples
+        _misclassified_idx = np.where(incorrect_mask)[0]
+        _n_show = min(n_show, len(_misclassified_idx))
+
+        _fig_mis, _axes_mis = plt.subplots(
+            1, _n_show, figsize=(3 * _n_show, 3)
+        )
+        if _n_show > 0:
+            for _i, _idx in enumerate(_misclassified_idx[:_n_show]):
+                _img = X_test[_idx].transpose(1, 2, 0)
+                _img = _img * np.array(IMAGENET_STD) + np.array(IMAGENET_MEAN)
+                _img = np.clip(_img, 0, 1)
+                _axes_mis[_i].imshow(_img)
+                _axes_mis[_i].axis("off")
+                _axes_mis[_i].set_title(
+                    f"True: {classes[YT[_idx]]}\nPred: {classes[Yp[_idx]]}\nConf: {_conf_incorrect[_i]:.2f}",
+                    fontsize=9,
+                )
+            plt.tight_layout()
+        else:
+            _axes_mis.axis("off")
+            _axes_mis.set_title(f"No misclassified examples!")
+
+        # Plot confidence distributions
+        _fig_conf, _ax_conf = plt.subplots(figsize=(6, 3))
+        _ax_conf.hist(
+            _conf_correct,
+            bins=20,
+            alpha=0.6,
+            label=f"Correct (n={len(_conf_correct)})",
+            color="#55A868",
+        )
+        _ax_conf.hist(
+            _conf_incorrect,
+            bins=20,
+            alpha=0.6,
+            label=f"Incorrect (n={len(_conf_incorrect)})",
+            color="#C44E52",
+        )
+        _ax_conf.set_xlabel("Prediction Confidence")
+        _ax_conf.set_ylabel("Count")
+        _ax_conf.set_title(f"{label} - Confidence Distribution")
+        _ax_conf.legend()
+        _ax_conf.grid(alpha=0.3)
+        plt.tight_layout()
+
+        return _fig_conf, _fig_mis
+
+    return (plot_misclassified_and_confidence,)
 
 
 @app.cell
@@ -549,12 +670,35 @@ def _(CustomCNN, X_train_64, YL, lrs_cnn):
 
 
 @app.cell
-def _(Alg_cnn, X_test_64, YT, overview_and_plot_cm):
+def _(
+    Alg_cnn,
+    X_test_64,
+    YT,
+    classes,
+    overview_and_plot_cm,
+    plot_misclassified_and_confidence,
+):
     Yp_cnn = Alg_cnn.predict(X_test_64)
     acc_cnn = accuracy_score(YT, Yp_cnn)
     cm_cnn = confusion_matrix(YT, Yp_cnn)
 
-    overview_and_plot_cm(acc_cnn, None, cm_cnn, "Custom Neural Network")
+    _fig_conf_cnn, _fig_mis_cnn = plot_misclassified_and_confidence(
+        Alg_cnn, X_test_64, YT, Yp_cnn, classes, "Custom CNN"
+    )
+
+    mo.vstack(
+        [
+            mo.hstack(
+                [
+                    overview_and_plot_cm(
+                        acc_cnn, None, cm_cnn, "Custom Neural Network"
+                    ),
+                    _fig_conf_cnn,
+                ]
+            ),
+            _fig_mis_cnn,
+        ]
+    )
     return acc_cnn, cm_cnn
 
 
@@ -614,12 +758,35 @@ def _(CustomRN18, LRScheduler, X_train_224, YL, nn):
 
 
 @app.cell
-def _(Alg_rn18, X_test_224, YT, overview_and_plot_cm):
+def _(
+    Alg_rn18,
+    X_test_224,
+    YT,
+    classes,
+    overview_and_plot_cm,
+    plot_misclassified_and_confidence,
+):
     Yp_rn18 = Alg_rn18.predict(X_test_224)
     acc_rn18 = accuracy_score(YT, Yp_rn18)
     cm_rn18 = confusion_matrix(YT, Yp_rn18)
 
-    overview_and_plot_cm(acc_rn18, None, cm_rn18, "Custom Neural Network")
+    _fig_conf_rn18, _fig_mis_rn18 = plot_misclassified_and_confidence(
+        Alg_rn18, X_test_224, YT, Yp_rn18, classes, "ResNet18"
+    )
+
+    mo.vstack(
+        [
+            mo.hstack(
+                [
+                    overview_and_plot_cm(
+                        acc_rn18, None, cm_rn18, "ResNet18 (no freeze)"
+                    ),
+                    _fig_conf_rn18,
+                ]
+            ),
+            _fig_mis_rn18,
+        ]
+    )
     return Yp_rn18, acc_rn18, cm_rn18
 
 
@@ -654,15 +821,47 @@ def _(CustomRN18, LRScheduler, X_train_224, YL, nn):
 
 
 @app.cell
-def _(Alg_rn18_frz, X_test_224, YT, overview_and_plot_cm):
+def _(
+    Alg_rn18_frz,
+    X_test_224,
+    YT,
+    classes,
+    overview_and_plot_cm,
+    plot_misclassified_and_confidence,
+):
     Yp_rn18_frz = Alg_rn18_frz.predict(X_test_224)
     acc_rn18_frz = accuracy_score(YT, Yp_rn18_frz)
     cm_rn18_frz = confusion_matrix(YT, Yp_rn18_frz)
 
-    overview_and_plot_cm(
-        acc_rn18_frz, None, cm_rn18_frz, "ResNet18 with frozen hidden layers"
+    _fig_conf_frz, _fig_mis_frz = plot_misclassified_and_confidence(
+        Alg_rn18_frz, X_test_224, YT, Yp_rn18_frz, classes, "ResNet18 (frozen)"
+    )
+
+    mo.vstack(
+        [
+            mo.hstack(
+                [
+                    overview_and_plot_cm(
+                        acc_rn18_frz,
+                        None,
+                        cm_rn18_frz,
+                        "ResNet18 with frozen hidden layers",
+                    ),
+                    _fig_conf_frz,
+                ]
+            ),
+            _fig_mis_frz,
+        ]
     )
     return acc_rn18_frz, cm_rn18_frz
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    ## Loss and Validation for each Network
+    """)
+    return
 
 
 @app.cell
@@ -705,8 +904,8 @@ def _(Alg_cnn, Alg_rn18, Alg_rn18_frz):
         color="#55A868",
         linestyle="--",
     )
-    _axes[0].set_title("Andamento Loss (Train vs Val)")
-    _axes[0].set_xlabel("Epoche")
+    _axes[0].set_title("Loss (Train vs Val)")
+    _axes[0].set_xlabel("Epochs")
     _axes[0].set_ylabel("Cross-Entropy Loss")
     _axes[0].legend()
     _axes[0].grid(alpha=0.3)
@@ -785,7 +984,7 @@ def _(
     baseline = 1.0 / NUM_CLASSES
 
     # Create the comparison plot
-    _fig, _ax = plt.subplots(figsize=(12, 7))
+    _fig, _ax = plt.subplots(figsize=(12, 5))
 
     x = np.arange(len(model_names))
     width = 0.25
@@ -867,15 +1066,8 @@ def _(
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    > [!TODO]
-    >
-    > * Add heatmap for a non-pizza image for CNNs
+    ## Some example images with LinerSVC versus ResNet18
     """)
-    return
-
-
-@app.cell
-def _():
     return
 
 
@@ -908,15 +1100,13 @@ def _(X_test_64, YT, Yp_rn18, Yp_svm, classes):
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    ## Heatmap
+    ## GradCam
     """)
     return
 
 
 @app.cell
 def _(Alg_rn18, X_test_224, YT, classes):
-    import cv2  # oppure usiamo semplice scipy/matplotlib se cv2 non c'è
-
     def generate_gradcam(model, img_tensor, target_class):
         model.eval()
         gradients = []
@@ -967,7 +1157,7 @@ def _(Alg_rn18, X_test_224, YT, classes):
     idx_pizza = np.where(YT == 1)[0][0]
     idx_not_pizza = np.where(YT == 0)[0][0]
 
-    _fig, _axs = plt.subplots(2, 2, figsize=(8, 8))
+    _fig, _axs = plt.subplots(2, 2, figsize=(8, 6))
 
     for row, (idx, cls_target) in enumerate(
         [(idx_pizza, 1), (idx_not_pizza, 0)]
@@ -998,7 +1188,7 @@ def _(Alg_rn18, X_test_224, YT, classes):
             cam, cmap="jet", alpha=0.5, extent=(0, 224, 224, 0)
         )
         _axs[row, 1].set_title(
-            f"Grad-CAM (Focus su {classes[cls_target]})", fontsize=11
+            f"Grad-CAM (Focus on {classes[cls_target]})", fontsize=11
         )
         _axs[row, 1].axis("off")
 
@@ -1009,6 +1199,14 @@ def _(Alg_rn18, X_test_224, YT, classes):
     )
     plt.tight_layout()
     _fig
+    return
+
+
+@app.cell(hide_code=True)
+def _():
+    mo.md(r"""
+    # Thanks for the <u>Attention</u>!
+    """)
     return
 
 

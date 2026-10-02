@@ -1,0 +1,119 @@
+{
+  "type": "slides",
+  "data": {
+    "cells": [
+      {
+        "type": "skip",
+        "showCode": false
+      },
+      {},
+      {},
+      {
+        "type": "slide"
+      },
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "skip"
+      },
+      {},
+      {
+        "type": "skip"
+      },
+      {},
+      {
+        "type": "skip"
+      },
+      {},
+      {},
+      {
+        "type": "slide"
+      },
+      {
+        "type": "fragment"
+      },
+      {},
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "slide"
+      },
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {},
+      {
+        "type": "fragment"
+      },
+      {
+        "type": "slide"
+      },
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {
+        "type": "skip"
+      },
+      {
+        "type": "fragment"
+      },
+      {
+        "type": "fragment"
+      },
+      {},
+      {},
+      {
+        "type": "skip"
+      },
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "skip"
+      },
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "showCode": false,
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {
+        "type": "fragment"
+      },
+      {},
+      {}
+    ],
+    "deck": {
+      "transition": "slide"
+    }
+  }
+}
